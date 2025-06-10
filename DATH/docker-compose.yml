@@ -1,0 +1,87 @@
+services:
+  techshop-website:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - '4200:4200'
+    depends_on:
+      techshop-api:
+        condition: service_healthy
+
+  sqlserver:
+    container_name: sqlserver
+    hostname: sqlserver
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    user: root
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_SA_PASSWORD: 'Thistimeisover1!'
+      MSSQL_DATA_DIR: /var/opt/mssql/data
+      MSSQL_TCP_PORT: 1433
+      MSSQL_PID: 'Developer' 
+    restart: always 
+    ports: 
+      - "1455:1433"
+    volumes:
+      - techshop-prod-volume:/var/opt/mssql/data
+      - techshop-prod-volume:/var/opt/mssql/log
+      - techshop-prod-volume:/var/opt/mssql/secrets
+    networks:
+      - techshop-network
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Thistimeisover1!", "-C", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  techshop-api:
+    build:
+      context: backend/Web
+      dockerfile: API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - TZ=Asia/Ho_Chi_Minh
+      - ASPNETCORE_HTTP_PORTS=8080
+    restart: always
+    ports:
+      - "8080:8080"
+    networks:
+      - techshop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      seqlog:
+        condition: service_healthy
+    
+  seqlog:
+    image: datalust/seq:latest
+    container_name: "seqlog"
+    volumes:
+      - techshop-prod-volume:/data
+    environment:
+      - ACCEPT_EULA=Y
+    restart: always
+    ports:
+      - 5341:5341
+      - 8081:80
+    networks:
+      - techshop-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  techshop-prod-volume:
+ 
+networks:
+  techshop-network:
+    driver: bridge

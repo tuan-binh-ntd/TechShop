@@ -1,59 +1,6 @@
-using Bussiness.Extensions;
-using Bussiness.Helper;
-using Bussiness.Repository;
-using Database;
-using Entities;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
-using Serilog;
-using Swashbuckle.AspNetCore.Filters;
-using System.Text;
-using API.SignalRHub;
-using Bussiness.Services.Core;
-using Bussiness.Interface.Core;
-using Bussiness.Interface.ProductInterface;
-using Bussiness.Services.ProductService;
-using Bussiness.Interface.ProductCategoryInterface;
-using Bussiness.Services.ProductCategoryService;
-using Bussiness.Interface.CustomerInterface;
-using Bussiness.Interface.EmployeeInterface;
-using Bussiness.Services.EmployeeService;
-using Bussiness.Services.CustomerService;
-using Bussiness.Interface.PaymentInterface;
-using Bussiness.Services.PaymentService;
-using Bussiness.Interface.PromotionInterface;
-using Bussiness.Services.PromotionService;
-using Bussiness.Interface.ShippingInterface;
-using Bussiness.Services.ShippingService;
-using Bussiness.Interface.ShopInterface;
-using Bussiness.Services.ShopService;
-using Bussiness.Services.SpecificationCategoryService;
-using Bussiness.Interface.SpecificationInterface;
-using Bussiness.Services.SpecificationService;
-using Bussiness.Interface.SpecificationCategoryInterface;
-using Bussiness.Interface.WarehouseInterface;
-using Bussiness.Services.WarehouseService;
-using Bussiness.Interface.OrderInterface;
-using Bussiness.Services.OrderService;
-using Bussiness.Services.MessageService;
-using Bussiness.Interface.MessageInterface;
-using Bussiness.Interface.NotificationInterface;
-using Bussiness.Services.NotificationService;
-using Bussiness.Interface.FeedbackInterface;
-using Bussiness.Services.FeedbackService;
-using Bussiness.Interface.InstallmentInterface;
-using Bussiness.Services.InstallmentService;
-using Bussiness.EmailService;
-using Microsoft.Extensions.Configuration;
-
-// Set path of project for APP_BASE_DIRECTORY
-Environment.SetEnvironmentVariable("APP_BASE_DIRECTORY", Directory.GetCurrentDirectory());
-
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseSerilog((context, loggerConfig) => loggerConfig.ReadFrom.Configuration(context.Configuration));
 // Add services to the container.
 builder.Services.AddControllers();
 
@@ -182,11 +129,6 @@ builder.Services.AddSwaggerGen(options =>
 
     options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
-// Confifuration write log to file
-var _logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration).Enrich.FromLogContext()
-    .CreateLogger();
-builder.Logging.AddSerilog(_logger);
 
 // Add Session
 builder.Services.AddDistributedMemoryCache();
@@ -213,6 +155,9 @@ builder.Services.AddHttpContextAccessor();
 // Add EmailService Service
 EmailConfiguration? emailConfig = builder.Configuration.GetSection("EmailConfiguration").Get<EmailConfiguration>();
 builder.Services.AddSingleton(emailConfig!);
+
+// Add Healthcheck
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 // Init Admin
@@ -244,11 +189,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
-
-app.UseDefaultFiles();
-
-app.UseStaticFiles();
+app.UseSerilogRequestLogging();
 
 app.UseCors(x => x.AllowAnyHeader().AllowAnyMethod().AllowCredentials().WithOrigins("http://localhost:4200"));
 
@@ -267,5 +208,7 @@ app.MapHub<NotifyHub>("hubs/notify");
 app.MapHub<OrderHub>("hubs/order");
 
 app.MapHub<PresenceHub>("hubs/presence");
+
+app.MapHealthChecks("health");
 
 await app.RunAsync();

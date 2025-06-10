@@ -1,0 +1,62 @@
+services:
+  mssql:
+    container_name: mssql
+    hostname: mssql
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_SA_PASSWORD: 'Thistimeisover1!'
+      MSSQL_DATA_DIR: /var/opt/mssql/data
+      MSSQL_PID: 'Developer' 
+      MSSQL_TCP_PORT: 1433 
+    ports: 
+      - "1455:1433"
+    volumes:
+      - techshop-volume:/var/opt/mssql/data
+      - techshop-volume:/var/opt/mssql/log
+      - techshop-volume:/var/opt/mssql/secrets
+    networks:
+      - techshop-network
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Thistimeisover1!", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  techshop-api:
+    image: ${DOCKER_REGISTRY-}api
+    build:
+      context: .
+      dockerfile: API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - TZ=Asia/Ho_Chi_Minh
+      - ASPNETCORE_HTTP_PORTS=8080
+    ports:
+      - "8080:8080"
+    restart: always
+    networks:
+      - techshop-network
+    depends_on:
+      mssql:
+        condition: service_healthy
+    
+  seqlog:
+    image: datalust/seq:latest
+    container_name: "seqlog"
+    volumes:
+      - techshop-volume:/data
+    environment:
+      - ACCEPT_EULA=Y
+    ports:
+      - 5341:5341
+      - 8081:80
+    networks:
+      - techshop-network
+
+volumes:
+  techshop-volume:
+ 
+networks:
+  techshop-network:
+    driver: bridge
